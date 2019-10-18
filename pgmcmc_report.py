@@ -104,30 +104,30 @@ def parameter_correlations(data, names):
 def mcmc_stats(ioblk):
     # Show proposal step acceptances
     nfreepar = ioblk.mcmc.paridx.size
-    print "Acceptance Fractions"
+    print('Acceptance Fractions')
     for i in range(nfreepar):
         j = ioblk.mcmc.paridx[i]
         curname = ioblk.physval_names[j]
         curaccept = ioblk.mcmc.accepts[j]
         curattempt = ioblk.mcmc.attempts[j]
-        print "Parameter: {0:s} {1:f}".format( \
-                 curname, curaccept/curattempt)
+        print("Parameter: {0:s} {1:f}".format( \
+                 curname, curaccept/curattempt))
                  
     if ioblk.parm.dopartemp:
         for t in range(ioblk.pt.ntemp):
-            print "Accept Fraction By Temperature: {0:d}".format(t)
+            print("Accept Fraction By Temperature: {0:d}".format(t))
             for i in range(nfreepar):
                 j = ioblk.mcmc.paridx[i]
                 curname = ioblk.physval_names[j]
                 curaccept = ioblk.pt.allaccepts[j,t]
                 curattempt = ioblk.pt.allattempts[j,t]
-                print "Parameter: {0:s} {1:f}".format( \
-                     curname, curaccept/curattempt)
+                print ("Parameter: {0:s} {1:f}".format( \
+                     curname, curaccept/curattempt))
         for t in range(ioblk.pt.ntemp-1):
             curattempt = ioblk.pt.swapattempts[t]
             curaccept = ioblk.pt.swapaccepts[t]
-            print "Temp: {0:d} Attmpts: {1:f} Accpt Fraction: {2:f}".format( \
-                    t, curattempt, curaccept/curattempt)
+            print( "Temp: {0:d} Attmpts: {1:f} Accpt Fraction: {2:f}".format( \
+                    t, curattempt, curaccept/curattempt))
                 
     
 if __name__ == "__main__":

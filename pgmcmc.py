@@ -28,6 +28,7 @@ class pgmcmc_ioblk:
         self.calcval_names = ['']
         self.fixed = np.array([0])
         self.nparm = 0
+
         self.physval_mins = np.array([0.0])
         self.physval_maxs = np.array([0.0])
         self.physvals = np.array([0.0])
@@ -50,13 +51,14 @@ class pgmcmc_ioblk:
         self.func_calcvals = []
         self.func_prior = []
         self.func_likehood = []
+        self.func_showmodel = []
         self.fighandle = []
         self.axhandle = []
         
-    def __str__(self):
-        for k in self.__dict__:
-            print k, self.__dict__[k]
-        return ''
+    #def __str__(self):
+    #    for k in self.__dict__:
+    #        print(k, self.__dict__[k])
+    #    return ''
 
 def pgmcmc_one_mcmc_step(ioblk):
     """ Take one iteration through all parameters one at a time
@@ -138,10 +140,11 @@ def pgmcmc_iterate_proposals(ioblk):
     if (ioblk.parm.debugLevel > 2): ioblk.func_showmodel(ioblk)
 
     # Do initial burn
-    print "Start Initial Burn"
+    print("Start Initial Burn")
     ioblk, fracs = pgmcmc_burnit(ioblk, ioblk.parm.initNSteps)
-    print "Initial Burn Finished"
-    print fracs
+    fracs = np.atleast_1d(fracs)
+    print("Initial Burn Finished")
+    print(fracs)
     #print ioblk.scls[ioblk.mcmc.paridx]
 
     if (ioblk.parm.debugLevel > 2): ioblk.func_showmodel(ioblk)
@@ -163,15 +166,16 @@ def pgmcmc_iterate_proposals(ioblk):
                 ioblk.scls[j] = ioblk.scls[j] * 2.0
             i += 1
             ioblk, fracs = pgmcmc_burnit(ioblk, ioblk.parm.coarseNSteps)
-            print "Coarse iteration: ", i
-            print fracs
-            print ioblk.scls[ioblk.mcmc.paridx]
+            fracs = np.atleast_1d(fracs)
+            print("Coarse iteration: ", i)
+            print(fracs)
+            print(ioblk.scls[ioblk.mcmc.paridx])
             if (ioblk.parm.debugLevel > 2): ioblk.func_showmodel(ioblk)
-    print "Done Coarse proposal iteration"
+    print("Done Coarse proposal iteration")
     if (i == ioblk.parm.maxPropTries):
-        print "Coarse Proposal Iteration did not converge in Steps: ", \
-                ioblk.parm.maxPropTries
-        raw_input("Please Ctrl-C to exit")
+        print("Coarse Proposal Iteration did not converge in Steps: ", \
+                ioblk.parm.maxPropTries)
+        input("Please Ctrl-C to exit")
 
 
     # Start Refined Proposal Step Size corrections
@@ -193,15 +197,17 @@ def pgmcmc_iterate_proposals(ioblk):
                     np.abs(fracs[idxhgh] - ioblk.parm.fracwant))
             i += 1
             ioblk, fracs = pgmcmc_burnit(ioblk, ioblk.parm.refineNSteps)
-            print "Refine iteration: ", i
-            print fracs
-            print ioblk.scls[ioblk.mcmc.paridx]
+            fracs = np.atleast_1d(fracs)
+
+            print("Refine iteration: ", i)
+            print(fracs)
+            print(ioblk.scls[ioblk.mcmc.paridx])
             if (ioblk.parm.debugLevel > 2): ioblk.func_showmodel(ioblk)
-    print "Done Refined proposal iteration"
+    print("Done Refined proposal iteration")
     if (i == ioblk.parm.maxPropTries):
-        print "Refined Proposal Iteration did not converge in Steps: ", \
-                ioblk.parm.maxPropTries
-        raw_input("Please Ctrl-C to exit")
+        print("Refined Proposal Iteration did not converge in Steps: ", \
+                ioblk.parm.maxPropTries)
+        input("Please Ctrl-C to exit")
     
     pgmcmc_save_state(ioblk,'ioblk_props')
     
@@ -301,7 +307,7 @@ def pgmcmc_run_mcmc(ioblk):
     for t in range(ioblk.pt.ntemp):
         ioblk.pt.curtempidx=t
         ioblk = pgmcmc_loadtemp(ioblk)
-        print "Start Proposal Iterations for Temperature: {0:d}".format(t)
+        print("Start Proposal Iterations for Temperature: {0:d}".format(t))
         if t > 0 and ioblk.pt.temps[0] != 0.0:
             ioblk.scls = ioblk.pt.allscls[:, t-1] * ioblk.pt.temps[t-1] \
                             / ioblk.pt.temps[t]
@@ -311,8 +317,8 @@ def pgmcmc_run_mcmc(ioblk):
             ioblk.mcmc.prior = ioblk.pt.allprior[t-1]
         ioblk = pgmcmc_iterate_proposals(ioblk)
         ioblk = pgmcmc_savetemp(ioblk)
-    print "Done with Proposal Iterations"
-    print "Start MCMC Run"    
+    print("Done with Proposal Iterations")
+    print("Start MCMC Run")
 
     # reset things
     ioblk.mcmc.pos = 0
@@ -359,13 +365,13 @@ def pgmcmc_run_mcmc(ioblk):
             if ioblk.parm.saveAltTemp:
                 pgmcmc_save_state(ioblk, 'runalt', altpvals, altcvals, altbvals)                
         if np.mod(i, 100) == 0:
-            print "Step: ", i
+            print("Step: ", i)
         ioblk.mcmc.pos += 1
         
     pgmcmc_save_state(ioblk, 'run', pvals, cvals, bvals)
     if ioblk.parm.saveAltTemp:
         pgmcmc_save_state(ioblk, 'runalt', altpvals, altcvals, altbvals)
-    return
+    return ioblk, pvals
         
 def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
     # Handles cannot be pickled so save them, undefine them, then put back
@@ -383,7 +389,28 @@ def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
     ioblk.func_likehood = []
     ioblk.func_prior = []
     ioblk.func_showmodel =[]
-    pickle.dump(ioblk, open(prefix+'.pkl', 'wb'))
+    
+    # These are specific to my occurrence rate problem
+    if hasattr(ioblk, 'cudaper2d'):
+        d1 = ioblk.cudaper2d
+        d2 = ioblk.cudarp2d
+        d3 = ioblk.cudasfuncret
+        d4 = ioblk.hostsfuncret
+        ioblk.cudaper2d = []
+        ioblk.cudarp2d = []
+        ioblk.cudasfuncret = []
+        ioblk.hostsfuncret = []
+    if hasattr(ioblk, 'cudaplansamps'):
+        e1 = ioblk.cudaplansamps 
+        e2 = ioblk.cudaplansamppers 
+        e3 = ioblk.cudaplansfuncret 
+        e4 = ioblk.cudaplanhostsfuncret 
+        ioblk.cudaplansamps = []
+        ioblk.cudaplansamppers = []
+        ioblk.cudaplansfuncret  = []
+        ioblk.cudaplanhostsfuncret = []
+        
+    pickle.dump(ioblk, open(prefix+'.pkl', 'wb'), protocol=0, fix_imports=True)
     ioblk.fighandle = fh
     ioblk.axhandle = ah
     ioblk.func_calcvals = func1
@@ -391,6 +418,19 @@ def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
     ioblk.func_likehood = func3
     ioblk.func_prior = func4
     ioblk.func_showmodel = func5
+    if hasattr(ioblk, 'cudaper2d'):
+        ioblk.cudaper2d = d1
+        ioblk.cudarp2d = d2
+        ioblk.cudasfuncret = d3
+        ioblk.hostsfuncret = d4
+    if hasattr(ioblk, 'cudaplansamps'):
+        ioblk.cudaplansamps = e1
+        ioblk.cudaplansamppers = e2
+        ioblk.cudaplansfuncret  = e3
+        ioblk.cudaplanhostsfuncret = e4
+        
+    
+    
     f = h5py.File(prefix+'.hd5', 'w')
     if (not len(pvals) == 0):
         pvaldset = f.create_dataset('Pvals', data = pvals, compression='gzip')
@@ -411,6 +451,7 @@ def pgmcmc_setup(ioblk):
        ioblk - [class] modified ioblk
     """
     ioblk.physvals = np.copy(ioblk.origests)
+    ioblk.calcvals = np.copy(ioblk.origests)
     ioblk.nparm = np.size(ioblk.fixed)
 
     ioblk.model = np.full_like(ioblk.yData, 1.0)
@@ -451,7 +492,7 @@ def pgmcmc_setup(ioblk):
     ioblk.pt.curtempidx = 0
     ioblk.pt.curtemp = ioblk.pt.temps[0]
     ioblk.pt.ntemp = ioblk.pt.temps.size
-    ioblk.pt.swapat = np.zeros((np.floor(ioblk.parm.maxstps/2),))
+    ioblk.pt.swapat = np.zeros((np.floor(ioblk.parm.maxstps/2).astype(int),))
     ioblk.pt.swapgd = np.copy(ioblk.pt.swapat)
     ioblk.pt.swaptemp = np.copy(ioblk.pt.swapat)
     ioblk.pt.swapattempts = np.zeros_like(ioblk.pt.temps)
@@ -476,11 +517,11 @@ def pgmcmc_setup(ioblk):
     
     # Test prior
     ioblk, err = ioblk.func_prior(ioblk)
-    print "Prior Test: ",err
+    print("Prior Test: ",err)
     
     # Test likelihood
     ioblk, err = ioblk.func_likehood(ioblk)
-    print "Likelihood Test: ",err
+    print("Likelihood Test: ",err)
     ioblk.mcmc.pos = 1 # Suppress plotting temporarily
     # Test mcmc step
     ioblk = pgmcmc_one_mcmc_step(ioblk)
@@ -529,7 +570,7 @@ class pgmcmc_parameters:
 
     def __str__(self):
         for k in self.__dict__:
-            print k, self.__dict__[k]
+            print(k, self.__dict__[k])
         return ''
 
 class pgmcmc_mcmc:
@@ -560,7 +601,7 @@ class pgmcmc_mcmc:
         
     def __str__(self):
         for k in self.__dict__:
-            print k, self.__dict__[k]
+            print(k, self.__dict__[k])
         return ''
         
 class pgmcmc_pt:
@@ -601,7 +642,7 @@ class pgmcmc_pt:
                 
     def __str__(self):
         for k in self.__dict__:
-            print k, self.__dict__[k]
+            print(k, self.__dict__[k])
         return ''
         
 def pgmcmc_loadtemp(ioblk):
