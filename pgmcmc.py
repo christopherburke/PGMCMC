@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 import pickle
+import copy
+import scipy.optimize as opt
 
 
 class pgmcmc_ioblk:
@@ -72,6 +74,7 @@ def pgmcmc_one_mcmc_step(ioblk):
     tempfactor = 1.0
     if ioblk.parm.dopartemp:
         tempfactor = ioblk.pt.curtemp
+        
     # iterate through each free to vary parameter
     for ip in np.arange(curp.size):
         ioblk.mcmc.attempts[ip] += 1
@@ -142,7 +145,6 @@ def pgmcmc_iterate_proposals(ioblk):
     # Do initial burn
     print("Start Initial Burn")
     ioblk, fracs = pgmcmc_burnit(ioblk, ioblk.parm.initNSteps)
-    fracs = np.atleast_1d(fracs)
     print("Initial Burn Finished")
     print(fracs)
     #print ioblk.scls[ioblk.mcmc.paridx]
@@ -166,7 +168,6 @@ def pgmcmc_iterate_proposals(ioblk):
                 ioblk.scls[j] = ioblk.scls[j] * 2.0
             i += 1
             ioblk, fracs = pgmcmc_burnit(ioblk, ioblk.parm.coarseNSteps)
-            fracs = np.atleast_1d(fracs)
             print("Coarse iteration: ", i)
             print(fracs)
             print(ioblk.scls[ioblk.mcmc.paridx])
@@ -197,8 +198,6 @@ def pgmcmc_iterate_proposals(ioblk):
                     np.abs(fracs[idxhgh] - ioblk.parm.fracwant))
             i += 1
             ioblk, fracs = pgmcmc_burnit(ioblk, ioblk.parm.refineNSteps)
-            fracs = np.atleast_1d(fracs)
-
             print("Refine iteration: ", i)
             print(fracs)
             print(ioblk.scls[ioblk.mcmc.paridx])
@@ -225,7 +224,7 @@ def pgmcmc_check_pt_swap(ioblk):
         ioblk.pt.swapat[ioblk.pt.nswaps] = ioblk.mcmc.pos
         ioblk.pt.swapgd[ioblk.pt.nswaps] = 0
         # Which Temp index to tray and swap
-        wantt = np.floor(np.random.rand() * (ioblk.pt.ntemp-1))
+        wantt = int(np.floor(np.random.rand() * (ioblk.pt.ntemp-1)))
         ioblk.pt.swaptemp[ioblk.pt.nswaps] = wantt
         ioblk.pt.swapattempts[wantt] += 1
         # Get data where wantt is currently
@@ -295,7 +294,7 @@ def pgmcmc_check_pt_swap(ioblk):
             ioblk = pgmcmc_savetemp(ioblk)
     return ioblk
     
-def pgmcmc_run_mcmc(ioblk):    
+def pgmcmc_run_mcmc(ioblk, postPropStart=False):    
 
     # reset things
     ioblk.mcmc.pos = 1 # a value of 1 turns off plotting
@@ -303,21 +302,44 @@ def pgmcmc_run_mcmc(ioblk):
     ioblk.mcmc.attempts = ioblk.mcmc.attempts * 0
     ioblk.mcmc.accepts = ioblk.mcmc.accepts * 0
 
-    # Start proposal step size iteration across all temperatures
-    for t in range(ioblk.pt.ntemp):
-        ioblk.pt.curtempidx=t
-        ioblk = pgmcmc_loadtemp(ioblk)
-        print("Start Proposal Iterations for Temperature: {0:d}".format(t))
-        if t > 0 and ioblk.pt.temps[0] != 0.0:
-            ioblk.scls = ioblk.pt.allscls[:, t-1] * ioblk.pt.temps[t-1] \
-                            / ioblk.pt.temps[t]
-            ioblk.calcvals = ioblk.pt.allcalcval[:, t-1]
-            ioblk.mcmc.like = ioblk.pt.alllike[t-1] * ioblk.pt.temps[t] \
-                            / ioblk.pt.temps[t-1]
-            ioblk.mcmc.prior = ioblk.pt.allprior[t-1]
-        ioblk = pgmcmc_iterate_proposals(ioblk)
-        ioblk = pgmcmc_savetemp(ioblk)
-    print("Done with Proposal Iterations")
+    if not postPropStart:
+        # Start proposal step size iteration across all temperatures
+        for t in range(ioblk.pt.ntemp):
+            ioblk.pt.curtempidx=t
+            ioblk = pgmcmc_loadtemp(ioblk)
+            print("Start Proposal Iterations for Temperature: {0:d} {1:f}".format(t, ioblk.pt.curtemp))
+            if t > 0 and ioblk.pt.temps[0] != 0.0:
+                ioblk.scls = np.copy(ioblk.pt.allscls[:, t-1] * ioblk.pt.temps[t-1] \
+                                / ioblk.pt.temps[t])
+                ioblk.calcvals = np.copy(ioblk.pt.allcalcval[:, t-1])
+                ioblk.mcmc.like = np.copy(ioblk.pt.alllike[t-1] * ioblk.pt.temps[t] \
+                                / ioblk.pt.temps[t-1])
+                ioblk.mcmc.prior = np.copy(ioblk.pt.allprior[t-1])
+            ioblk = pgmcmc_iterate_proposals(ioblk)
+            ioblk = pgmcmc_savetemp(ioblk)
+        print("Done with Proposal Iterations")
+    else:
+        # Load a set of proposal steps from a previous run
+        previoblk = pgmcmc_load_state('ioblk_props')
+        if ioblk.parm.debugLevel > 2:
+            fh = ioblk.fighandle
+            ah = ioblk.axhandle
+        func1 = ioblk.func_calcvals
+        func2 = ioblk.func_physvals
+        func3 = ioblk.func_likehood
+        func4 = ioblk.func_prior
+        func5 = ioblk.func_showmodel
+        ioblk = copy.deepcopy(previoblk)
+        
+        if ioblk.parm.debugLevel > 2:
+            ioblk.fighandle = fh
+            ioblk.axhandle = ah
+        ioblk.func_calcvals = func1
+        ioblk.func_physvals = func2
+        ioblk.func_likehood = func3
+        ioblk.func_prior = func4
+        ioblk.func_showmodel = func5
+        print("Loaded a previous proposal iteration")
     print("Start MCMC Run")
 
     # reset things
@@ -371,7 +393,7 @@ def pgmcmc_run_mcmc(ioblk):
     pgmcmc_save_state(ioblk, 'run', pvals, cvals, bvals)
     if ioblk.parm.saveAltTemp:
         pgmcmc_save_state(ioblk, 'runalt', altpvals, altcvals, altbvals)
-    return ioblk, pvals
+    return
         
 def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
     # Handles cannot be pickled so save them, undefine them, then put back
@@ -410,6 +432,7 @@ def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
         ioblk.cudaplansfuncret  = []
         ioblk.cudaplanhostsfuncret = []
         
+       
     pickle.dump(ioblk, open(prefix+'.pkl', 'wb'), protocol=0, fix_imports=True)
     ioblk.fighandle = fh
     ioblk.axhandle = ah
@@ -418,6 +441,7 @@ def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
     ioblk.func_likehood = func3
     ioblk.func_prior = func4
     ioblk.func_showmodel = func5
+   
     if hasattr(ioblk, 'cudaper2d'):
         ioblk.cudaper2d = d1
         ioblk.cudarp2d = d2
@@ -428,9 +452,7 @@ def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
         ioblk.cudaplansamppers = e2
         ioblk.cudaplansfuncret  = e3
         ioblk.cudaplanhostsfuncret = e4
-        
-    
-    
+     
     f = h5py.File(prefix+'.hd5', 'w')
     if (not len(pvals) == 0):
         pvaldset = f.create_dataset('Pvals', data = pvals, compression='gzip')
@@ -442,6 +464,10 @@ def pgmcmc_save_state(ioblk, prefix, pvals=[], cvals=[], bvals=[]):
     
     return
     
+def pgmcmc_load_state(prefix):
+    
+    ioblk = pickle.load(open(prefix+'.pkl', 'rb'))
+    return ioblk
     
 def pgmcmc_setup(ioblk):
     """Setup various data products before minimizing
@@ -482,6 +508,10 @@ def pgmcmc_setup(ioblk):
     ndat = ioblk.yData.size
     ioblk.likenorm = -np.sum(np.log(ioblk.errData)) - (ndat * np.log(np.sqrt(2.0*np.pi)))
 
+    # if ioblk.scls not correct length (most likely because just doing minizer)
+    #  set it to ones of correct length
+    if not len(ioblk.scls) == ioblk.nparm:
+        ioblk.scls = np.ones_like(ioblk.origests)
 
     # Setup parallel tempering things
     # Redefine temparature vector of parallel tempering turned off
@@ -513,15 +543,18 @@ def pgmcmc_setup(ioblk):
         ioblk.fighandle = plt.figure(figsize=(3,2),dpi=300,facecolor='white')
         ioblk.axhandle = plt.gca()
         ioblk.axhandle.set_position([0.125, 0.125, 0.825, 0.825])
-        ioblk.axhandle.set_axis_bgcolor('white')                            
+        #ioblk.axhandle.set_axis_bgcolor('white')                            
     
     # Test prior
     ioblk, err = ioblk.func_prior(ioblk)
-    print("Prior Test: ",err)
+    if ioblk.parm.debugLevel > 0:
+        print("Prior Test: ",err)
     
     # Test likelihood
     ioblk, err = ioblk.func_likehood(ioblk)
-    print("Likelihood Test: ",err)
+    ioblk.mcmc.like = ioblk.mcmc.like * ioblk.pt.curtemp
+    if ioblk.parm.debugLevel > 0:
+        print("Likelihood Test: ",err)
     ioblk.mcmc.pos = 1 # Suppress plotting temporarily
     # Test mcmc step
     ioblk = pgmcmc_one_mcmc_step(ioblk)
@@ -708,11 +741,11 @@ def press_key_to_close_figure():
     myskyblue = tuple(np.array([182.0, 219.0, 255.0]) / 255.0)
     myyellow = tuple(np.array([255.0, 255.0, 109.0]) / 255.0)
     mypink = tuple(np.array([255.0, 182.0, 119.0]) / 255.0)
-    labelfontsize = 17.0
-    tickfontsize = 12.0
-    datalinewidth = 3.0
-    plotboxlinewidth = 3.0
-    markersize = 1.0
+    labelfontsize = 8.0
+    tickfontsize = 8.0
+    datalinewidth = 1.0
+    plotboxlinewidth = 1.0
+    markersize = 0.5
     bkgcolor = 'white'
     axiscolor = myblack
     labelcolor = myblack
@@ -736,4 +769,121 @@ def press_key_to_close_figure():
                 'myblue':myblue, 'myred':myred, 'myorange':myorange, \
                 'myskyblue':myskyblue, 'myyellow':myyellow, 'mypink':mypink}
     return fig, ax, figstydict
-    
+
+#### The following functions are for running the minimzer rather than MCMC    
+def boundedvals(ioblk):
+    """Convert parameters to bounded versions that the minimzer will use
+       INPUT:
+         ioblk - [class] trp_ioblk class
+       OUTPUT:
+         ioblk - [class]
+         err - [0 ok ; 1 not ok]
+    """
+    err = 0 # Error flag
+    maxmindelta = ioblk.calcval_maxs - ioblk.calcval_mins
+    datamindelta = np.copy(ioblk.calcvals) - ioblk.calcval_mins
+    ioblk.boundedvals = -np.log( maxmindelta / datamindelta - 1.0)
+    if ~np.isfinite(ioblk.boundedvals).all():
+        print("Bounded Vals Bad")
+        print(ioblk.boundedvals)
+        print(ioblk.calcvals)
+        print(ioblk.physvals)
+        err = 1
+    return ioblk, err
+
+def unboundedvals(ioblk):
+    """Convert bounded parameter values that the minimizer uses to physvals
+       INPUT:
+         ioblk - [class] trp_ioblk class
+       OUTPUT:
+         ioblk - [class]
+         err - [0 ok ; 1 not ok]
+    """
+    err = 0 # Error flag
+    maxmindelta = ioblk.calcval_maxs - ioblk.calcval_mins
+    ioblk.calcvals = ioblk.calcval_mins + \
+                     (maxmindelta / (1.0 + np.exp( -np.copy(ioblk.boundedvals) )))
+    #if np.sum( np.isfinite(ioblk.physvals) ) != np.size(ioblk.boundedvals) :
+    if ~np.isfinite(ioblk.calcvals).all():
+        print("UnBounded Vals Bad")
+        print(ioblk.boundedvals)
+        print(ioblk.calcvals)
+        print(ioblk.physvals)
+        err = 1
+    return ioblk, err
+
+def pgmcmc_run_minimizer(ioblk, nIter, startLocs=None):
+    """Peform multiple iterations starting from random initial conditions
+       return the best solution in a chi2 sense among the nIter iterations
+    """
+    bestChi2s = np.zeros(nIter)
+    bestParameters = np.zeros((ioblk.physvals.size, nIter))
+    gdFits = np.zeros(nIter, dtype=np.bool)
+    ioblk, err = boundedvals(ioblk)
+
+    # physvalsavs and boundedvalsavs are used to store parameters
+    #  that are fixed during the calculation
+    #  ***They must be populated with fixed values before moving forward
+
+    ioblk.boundedvalsavs = np.copy(ioblk.boundedvals)
+    ioblk.bestboundedvals = np.copy(ioblk.boundedvals)
+    ioblk.minimized = False
+    ioblk.mcmc.curpar = 0
+
+    for i in range(nIter):
+        if startLocs is None:
+            ioblk.calcvals = ioblk.calcval_mins + \
+                         np.random.rand(ioblk.calcvals.size) * \
+                         (ioblk.calcval_maxs - ioblk.calcval_mins)
+        else:
+            ioblk.calcvals = startLocs[i,:]
+        # Replace random starts with parameters values that are fixed
+        ioblk.calcvals = np.where(ioblk.fixed == 1, ioblk.calcvalsavs, \
+                                    ioblk.calcvals)
+        ioblk, err = boundedvals(ioblk)
+        startParameters = ioblk.boundedvals[ioblk.mcmc.paridx]
+        usemethod = 'Nelder-Mead'
+        #usemethod = 'Powell'
+        useoptions = {'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 2000, 'maxfev': 2000}
+        #usemethod = 'CG'
+        #useoptions = {'gtol': 1e-5, 'maxiter': 2000}
+        allOutput = opt.minimize(minimizer_likehood, startParameters, args=(ioblk,), \
+                                 method=usemethod, options=useoptions)
+        ioblk.boundedvals[ioblk.mcmc.paridx] = allOutput['x']
+        ioblk.boundedvals = np.where(ioblk.fixed == 1, ioblk.boundedvalsavs, \
+                                     ioblk.boundedvals)
+        ioblk, err = unboundedvals(ioblk)
+        ioblk, err = ioblk.func_physvals(ioblk)
+        chi2min = allOutput['fun']
+        if ioblk.parm.debugLevel > 0:
+            strout = "%s %d %s %f" % ("It: ",i," Chi2: ",chi2min)
+            print(strout)
+            print(ioblk.physvals)
+        if np.isfinite(ioblk.physvals).all():
+            gdFits[i] = True
+            bestChi2s[i] = chi2min
+            bestParameters[:,i] = ioblk.physvals
+
+    # Done with iterations find the best one by chi2min
+    bestMaskedIdx = np.argmin(bestChi2s[gdFits])
+    ioblk.chi2min = bestChi2s[gdFits][bestMaskedIdx]
+    ioblk.bestphysvals = bestParameters[:,gdFits][:,bestMaskedIdx]
+    ioblk.physvals = np.copy(ioblk.bestphysvals)
+    ioblk, err = ioblk.func_calcvals(ioblk)
+    ioblk, err = boundedvals(ioblk)
+    ioblk.bestboundedvals = ioblk.boundedvals
+    if ioblk.parm.debugLevel > 0:
+        strout = "%s %f" % ("Overall Best Chi2 Min: ",ioblk.chi2min)
+        print(strout)
+        print(ioblk.physvals)
+    ioblk.minimized = True
+    return ioblk
+
+def minimizer_likehood(sParms, ioblk):
+    ioblk.mcmc.pos += 1
+    ioblk.boundedvals[ioblk.mcmc.paridx] = np.copy(sParms)
+    ioblk, err = unboundedvals(ioblk)
+    ioblk, err = ioblk.func_physvals(ioblk)
+    ioblk, err = ioblk.func_likehood(ioblk)
+   
+    return np.log10(ioblk.mcmc.chi2) 
