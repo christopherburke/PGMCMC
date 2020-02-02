@@ -26,9 +26,9 @@ def pgmcmc_calcvals(ioblk):
     err = 0 # Error flag
     ioblk.calcvals = np.copy(ioblk.physvals)
     if ~np.isfinite(ioblk.calcvals).all():
-        print "Calculation Values Bad"
-        print ioblk.calcvals
-        print ioblk.physvals                 
+        print("Calculation Values Bad")
+        print(ioblk.calcvals)
+        print(ioblk.physvals)                 
         err = 1
     return ioblk, err
 
@@ -46,9 +46,9 @@ def pgmcmc_physvals(ioblk):
     err = 0 # Error flag
     ioblk.physvals = np.copy(ioblk.calcvals)
     if ~np.isfinite(ioblk.physvals).all():                 
-        print "Physical Values Bad"
-        print ioblk.calcvals
-        print ioblk.physvals                 
+        print("Physical Values Bad")
+        print(ioblk.calcvals)
+        print(ioblk.physvals)                
         err = 1
     return ioblk, err
 
@@ -79,11 +79,11 @@ def pgmcmc_prior(ioblk):
         prior = np.sum(priorvals)
         # Warn on nonfinite and nonreal prior 
         if ~np.isfinite(prior):
-            print "Non Finite Prior"
-            print ioblk.physvals
+            print("Non Finite Prior")
+            print(ioblk.physvals)
         if ~np.isreal(prior):
-            print "Non Real Prior"
-            print ioblk.physvals
+            print("Non Real Prior")
+            print(ioblk.physvals)
     ioblk.mcmc.prior = prior
     return ioblk, err    
 
@@ -106,8 +106,8 @@ def pgmcmc_likehood(ioblk):
         resids = (ioblk.yData - ioblk.yModel) / ioblk.errData
         chi2 = np.sum(resids * resids)
         if (chi2 < ioblk.chi2min):
-            print "New Best Chi2: {0:f} Old: {1:f} Expected: {2:f}".format( \
-                 chi2, ioblk.chi2min, ioblk.expchi2)
+            print("New Best Chi2: {0:f} Old: {1:f} Expected: {2:f}".format( \
+                 chi2, ioblk.chi2min, ioblk.expchi2))
             ioblk.chi2min = chi2
             ioblk.bestphysvals = ioblk.physvals
             ioblk.bestcalcvals = ioblk.calcvals
@@ -135,14 +135,14 @@ def pgmcmc_model(ioblk):
     slope = ioblk.physvals[1]
     ioblk.yModel = constant + (slope * ioblk.xData)
     if ~np.isfinite(ioblk.yModel).all():                 
-        print "Model Values nonfinite"
-        print ioblk.calcvals
-        print ioblk.physvals                 
+        print("Model Values nonfinite")
+        print(ioblk.calcvals)
+        print(ioblk.physvals)               
         err = 1
     if ~np.isreal(ioblk.yModel).all():                 
-        print "Model Values Imaginary"
-        print ioblk.calcvals
-        print ioblk.physvals                 
+        print("Model Values Imaginary")
+        print(ioblk.calcvals)
+        print(ioblk.physvals)                 
         err = 1
     return ioblk, err
         
