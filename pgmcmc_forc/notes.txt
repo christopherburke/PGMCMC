@@ -1,0 +1,15 @@
+Apple mac M1 need to add brew installed libraries to paths
+in .zshrc if using zsh
+export CPATH=/opt/homebrew/include
+export LIBRARY_PATH=/opt/homebrew/lib
+
+
+brew update
+brew upgrade
+
+brew install gsl
+brew install plplot
+brew install hdf5
+
+To generate makefiles
+cmake -S . -B build

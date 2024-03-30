@@ -11,9 +11,7 @@ import h5py
 import pickle
 from pgmcmc import pgmcmc_ioblk, pgmcmc_parameters, pgmcmc_mcmc
 from pgmcmc import press_key_to_close_figure, on_key_event
-import scipy.stats as st
 
-    
 def acf(x, lag=20):
     return np.array([1]+[np.corrcoef(x[:-i], x[i:])[0,1] \
         for i in range(1,lag)])
@@ -36,7 +34,7 @@ def parameter_diagnostics(nameString, data, likes, priors, chi2s):
 
     prcresult = np.percentile(data, percents)
     limresult = np.percentile(data, limits)
-    print(prcresult)
+
     # Plot for raw data series    
     fig, ax, fsd = press_key_to_close_figure()
     # Turn off default axis
@@ -61,7 +59,7 @@ def parameter_diagnostics(nameString, data, likes, priors, chi2s):
     n, xedgesused, patches = ax2.hist(data, xedges,
                                           histtype='bar',
                                           edgecolor='k', color=fsd['myskyblue'],
-                                          normed=True)  
+                                          density=True)  
     ax2.set_title(nameString, size=fsd['labelfontsize'])
     ax2.set_ylabel('Prob dbin', size=fsd['labelfontsize'])
     ax2.tick_params('both', labelsize=fsd['tickfontsize'],
@@ -69,7 +67,7 @@ def parameter_diagnostics(nameString, data, likes, priors, chi2s):
                            color=fsd['axiscolor'], length=fsd['plotboxlinewidth'])
 
     # Autocorrelation
-    acfdata = acf(data, 30)
+    acfdata = acf(data, 60)
     ax3 = fig.add_subplot(gs[4,:])
     ax3.plot(acfdata,'-k')
     ax3.set_xlabel('Lag', size=fsd['labelfontsize'])
@@ -106,24 +104,24 @@ def parameter_correlations(data, names):
 def mcmc_stats(ioblk):
     # Show proposal step acceptances
     nfreepar = ioblk.mcmc.paridx.size
-    print( "Acceptance Fractions")
+    print('Acceptance Fractions')
     for i in range(nfreepar):
         j = ioblk.mcmc.paridx[i]
         curname = ioblk.physval_names[j]
         curaccept = ioblk.mcmc.accepts[i]
         curattempt = ioblk.mcmc.attempts[i]
-        print( "Parameter: {0:s} {1:f}".format( \
+        print("Parameter: {0:s} {1:f}".format( \
                  curname, curaccept/curattempt))
                  
     if ioblk.parm.dopartemp:
         for t in range(ioblk.pt.ntemp):
-            print ("Accept Fraction By Temperature: {0:d}".format(t))
+            print("Accept Fraction By Temperature: {0:d}".format(t))
             for i in range(nfreepar):
                 j = ioblk.mcmc.paridx[i]
                 curname = ioblk.physval_names[j]
                 curaccept = ioblk.pt.allaccepts[i,t]
                 curattempt = ioblk.pt.allattempts[i,t]
-                print( "Parameter: {0:s} {1:f}".format( \
+                print ("Parameter: {0:s} {1:f}".format( \
                      curname, curaccept/curattempt))
         for t in range(ioblk.pt.ntemp-1):
             curattempt = ioblk.pt.swapattempts[t]
@@ -135,13 +133,12 @@ def mcmc_stats(ioblk):
 if __name__ == "__main__":
     
     ioblk, pvals, cvals, bvals  = pgmcmc_load_state('run')
-
+    names = np.array(ioblk.physval_names)
+    cnames = np.array(ioblk.calcval_names)
     mcmc_stats(ioblk)
     nfreepar = ioblk.mcmc.paridx.size
     Clipout = 200
     currentPos = ioblk.mcmc.pos
-
-
     for i in range(nfreepar):
         j = ioblk.mcmc.paridx[i]
         currentName = ioblk.physval_names[j]
@@ -151,9 +148,8 @@ if __name__ == "__main__":
         currentChi2s = bvals[Clipout:currentPos-1,2]
         parameter_diagnostics(currentName, currentData, \
                  currentLikes, currentPriors, currentChi2s)
-
-    use_names = [ioblk.physval_names[i] for i in ioblk.mcmc.paridx]             
-    parameter_correlations(pvals[Clipout:currentPos-1,:], use_names)
+                 
+    parameter_correlations(pvals[Clipout:currentPos-1,:], names[ioblk.mcmc.paridx])
     
     for i in range(nfreepar):
         j = ioblk.mcmc.paridx[i]
@@ -164,7 +160,7 @@ if __name__ == "__main__":
         currentChi2s = bvals[Clipout:currentPos-1,2]
         parameter_diagnostics(currentName, currentData, \
                  currentLikes, currentPriors, currentChi2s)
-    use_names = [ioblk.calcval_names[i] for i in ioblk.mcmc.paridx]              
-    parameter_correlations(cvals[Clipout:currentPos-1,:], use_names)
+                 
+    parameter_correlations(cvals[Clipout:currentPos-1,:], cnames[ioblk.mcmc.paridx])
                  
     
